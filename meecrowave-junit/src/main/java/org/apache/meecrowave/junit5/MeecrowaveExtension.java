@@ -31,12 +31,14 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 import jakarta.enterprise.context.spi.CreationalContext;
 import java.io.File;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static java.util.Optional.ofNullable;
-import static org.junit.platform.commons.util.AnnotationUtils.findAnnotation;
 
 public class MeecrowaveExtension extends BaseLifecycle
         implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, AfterEachCallback {
@@ -51,7 +53,7 @@ public class MeecrowaveExtension extends BaseLifecycle
         @Override
         protected Optional<Class<? extends Annotation>[]> getScopes(final ExtensionContext context) {
             return context.getElement()
-                    .map(e -> findConfig(context))
+                    .map(e -> findMwConfig(context))
                     .map(MeecrowaveConfig::scopes)
                     .filter(s -> s.length > 0);
         }
@@ -142,7 +144,7 @@ public class MeecrowaveExtension extends BaseLifecycle
             }
 
             final Meecrowave.Builder builder = new Meecrowave.Builder();
-            final MeecrowaveConfig config = findConfig(context);
+            final MeecrowaveConfig config = findMwConfig(context);
             final String ctx;
             if (config != null) {
                 ctx = config.context();
@@ -156,12 +158,12 @@ public class MeecrowaveExtension extends BaseLifecycle
                         final Object value = method.invoke(config);
 
                         final Field configField = Configuration.class.getDeclaredField(method.getName());
-                        if (!configField.isAccessible()) {
+                        if (!configField.canAccess(builder)) {
                             configField.setAccessible(true);
                         }
 
                         if (value != null && (!String.class.isInstance(value) || !value.toString().isEmpty())) {
-                            if (!configField.isAccessible()) {
+                            if (!configField.canAccess(builder)) {
                                 configField.setAccessible(true);
                             }
                             configField.set(builder, File.class == configField.getType() ? /*we use string instead */new File(value.toString()) : value);
@@ -199,6 +201,7 @@ public class MeecrowaveExtension extends BaseLifecycle
         }
     }
 
+/*X
     private MeecrowaveConfig findConfig(final ExtensionContext context) {
         return findAnnotation(context.getElement(), MeecrowaveConfig.class)
                 .orElseGet(() -> context.getParent()
@@ -206,6 +209,46 @@ public class MeecrowaveExtension extends BaseLifecycle
                         .flatMap(it -> findAnnotation(it, MeecrowaveConfig.class))
                         .orElse(null));
     }
+*/
+
+    private MeecrowaveConfig findMwConfig(final ExtensionContext context) {
+        // if MeecrowaveConfig is directly on the test class
+        MeecrowaveConfig mwConfig = findMwConfig(context.getElement().isPresent() ? context.getElement().get(): null);
+
+        // also check parent classes
+        if (mwConfig == null && context.getParent().isPresent()) {
+            final AnnotatedElement annotatedParent = context.getParent().get().getElement().orElse(null);
+            mwConfig = findMwConfig(annotatedParent);
+        }
+
+
+        return mwConfig;
+    }
+
+    private MeecrowaveConfig findMwConfig(AnnotatedElement it) {
+        MeecrowaveConfig mwConfig = it.getAnnotation(MeecrowaveConfig.class);
+
+        if (mwConfig == null) {
+            //find metaconfig
+            mwConfig = Arrays.stream(it.getAnnotations()).sequential()
+                    .flatMap(an -> findMwConfigMetaAnnotation(an))
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        return  mwConfig;
+    }
+
+    private Stream<MeecrowaveConfig> findMwConfigMetaAnnotation(Annotation an) {
+        for (Annotation annotation : an.annotationType().getAnnotations()) {
+            if (annotation.annotationType().equals(MeecrowaveConfig.class)) {
+                return Stream.of((MeecrowaveConfig) annotation);
+            }
+        }
+
+        return null;
+    }
+
 
     private void doRelease(final ExtensionContext context) {
         ofNullable(context.getStore(NAMESPACE).get(CreationalContext.class, CreationalContext.class))
