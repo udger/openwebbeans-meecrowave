@@ -44,13 +44,6 @@
 
   <dependencies>
     <dependency>
-      <groupId>org.apache.meecrowave</groupId>
-      <artifactId>meecrowave-specs-api</artifactId>
-      <version>${project.version}</version>
-      <scope>provided</scope>
-    </dependency>
-
-    <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <version>${junit.version}</version>

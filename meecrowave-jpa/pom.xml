@@ -48,6 +48,12 @@
       <groupId>org.apache.openjpa</groupId>
       <artifactId>openjpa</artifactId>
       <version>${openjpa.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>jakarta.annotation</groupId>
+          <artifactId>jakarta.annotation-api</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
